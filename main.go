@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -16,13 +18,16 @@ import (
 )
 
 var (
-	debug    = kingpin.Flag("debug", "Enable debug mode.").Bool()
-	loglevel = kingpin.Flag("verbose", "Log level").Short('v').Counter()
-	limits   = kingpin.Flag("limit", "Timeout waiting for ping.").OverrideDefaultFromEnvar("TODO_LIMIT").Short('l').Strings()
-	commands = kingpin.Arg("command", "sadsda").Required().Strings()
+	debug     = kingpin.Flag("debug", "Enable debug mode.").Bool()
+	loglevel  = kingpin.Flag("verbose", "Log level").Short('v').Counter()
+	inventory = kingpin.Flag("inventory", "Inventory").Short('i').Required().ExistingFile()
+	limits    = kingpin.Flag("limit", "condition that filter items").OverrideDefaultFromEnvar("TODO_LIMIT").Short('l').Strings()
+	commands  = kingpin.Arg("command", "commands to run").Required().Strings()
 )
+var VERSION string
 
 func main() {
+	kingpin.Version(VERSION)
 	kingpin.Parse()
 
 	// adjust loglevel
@@ -33,20 +38,21 @@ func main() {
 	logrus.Debugf("filters: %q", fs)
 	logrus.Debugf("command: %s", *commands)
 
-	config := &Config{}
+	inv := &Inventory{}
 
-	content, err := ioutil.ReadFile("todo.yaml")
+	content, err := ioutil.ReadFile(*inventory)
 	if err != nil {
 		logrus.Error(err)
 	}
-	err = yaml.Unmarshal(content, config)
+	err = yaml.Unmarshal(content, inv)
 	if err != nil {
 		logrus.Error(err)
 	}
-	logrus.Debugf("config: %+v", config)
+
+	logrus.Debugf("Inventory Path: %s Struct: %+v, ", *inventory, inv)
 	// Load complete
 
-	tmpl, err := template.New("test").Parse(config.Runner)
+	tmpl, err := template.New("test").Parse(inv.Runner)
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -57,7 +63,7 @@ func main() {
 
 	go output(lines, done)
 
-	for name, elem := range config.List {
+	for name, elem := range inv.Items {
 		if !fs.isOk(elem) {
 			logrus.Debugf("next elem")
 			continue
@@ -81,8 +87,8 @@ func main() {
 	<-done
 }
 
-type Config struct {
-	List   map[string]map[string]string
+type Inventory struct {
+	Items  map[string]map[string]string
 	Runner string
 }
 
@@ -93,20 +99,25 @@ func exe_cmd(cmd string, wg *sync.WaitGroup, out chan<- string) {
 	head := parts[0]
 	parts = parts[1:len(parts)]
 
-	result, err := exec.Command(head, parts...).Output()
-	if err != nil {
-		logrus.Error(err)
+	c := exec.Command(head, parts...)
+	var buf = &bytes.Buffer{}
+
+	r := bufio.NewReader(buf)
+	c.Stdout = buf
+	c.Stderr = os.Stderr
+	c.Run()
+	for {
+		line, _, err := r.ReadLine()
+		if err == io.EOF {
+			logrus.Infof("exec end.")
+			return
+		}
+		if err != nil {
+			logrus.Error(err)
+			return
+		}
+		out <- string(line)
 	}
-	//fmt.Printf("%s", result)
-	// var buf bytes.Buffer
-	// r := bufio.NewReader(buf)
-	// cmd.Stdout = buf
-	// cmd.Stderr = os.Stderr
-	// cmd.Run()
-	// for line, err := r.ReadLine(); err == nil {
-	// out <-line
-	//}
-	out <- string(result)
 	// send stdout one-line by one-line
 }
 
