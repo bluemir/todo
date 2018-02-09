@@ -1,0 +1,26 @@
+items:
+  swarm-manager01:
+    addr: mng01.swarm.bluemir.me
+    cluster: web 
+    role: manager
+  swarm-manager01:
+    addr: mng02.swarm.bluemir.me
+    cluster: web
+    role: manager
+  swarm-worker01:
+    addr: worker01.swarm.bluemir.me
+    cluster: web
+    role: worker
+  swarm-worker02:
+    addr: worker02.swarm.bluemir.me
+    cluster: web
+    role: worker
+runner:  "ssh -n {{.addr}} -C {{.command}}"
+#runner: "rsh -n -l irteamsu {{.name}} {{.command}}"
+# usage:
+# cluster=web AND role=manager
+# todo -l cluster=web,role=manager -- sudo journalctl -u docker --since -20h
+# role=worker OR role=manager
+# todo -l role=worker -l role=manager -- sudo journalctl -u docker --sicne -20h
+# (cluster=web AND role=manager) OR name=swarm-worker02 
+# todo -l cluster=web,role=manager -l name=swarm-worker02  -- sudo systemctl restart docker
