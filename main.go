@@ -1,16 +1,8 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"html/template"
-	"io"
-	"io/ioutil"
 	"os"
-	"os/exec"
-	"strings"
-	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -18,154 +10,99 @@ import (
 )
 
 var (
-	debug     = kingpin.Flag("debug", "Enable debug mode.").Bool()
-	loglevel  = kingpin.Flag("verbose", "Log level").Short('v').Counter()
-	inventory = kingpin.Flag("inventory", "Inventory").Short('i').Required().ExistingFile()
-	limits    = kingpin.Flag("limit", "condition that filter items").OverrideDefaultFromEnvar("TODO_LIMIT").Short('l').Strings()
-	commands  = kingpin.Arg("command", "commands to run").Required().Strings()
+	app       = kingpin.New("todo", "massive runner for server management")
+	debug     = app.Flag("debug", "Enable debug mode.").Bool()
+	loglevel  = app.Flag("verbose", "Log level").Short('v').Counter()
+	inventory = app.Flag("inventory", "Inventory").Short('i').Default(".inventory.yaml").ExistingFile()
+
+	run         = app.Command("run", "running command")
+	runShowName = run.Flag("show-name", "show item name").Short('s').Bool()
+	runLimits   = run.Flag("limit", "condition that filter items").Short('l').Strings()
+	runCommand  = run.Arg("command", "commands to run").Required().String()
+
+	set       = app.Command("set", "Set item")
+	setItem   = set.Arg("item", "item name").Required().String()
+	setLabels = set.Arg("label", "labels").StringMap()
+
+	get     = app.Command("get", "Get item")
+	getItem = get.Arg("item", "item name").Required().String()
+
+	list       = app.Command("list", "list item")
+	listLimits = list.Flag("limit", "condition that filter items").Short('l').Strings()
+	//listShowLabel = list.GetFlag
 )
 var VERSION string
 
 func main() {
-	kingpin.Version(VERSION)
-	kingpin.Parse()
+	app.Version(VERSION)
+	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// adjust loglevel
 	logrus.SetOutput(os.Stderr)
 	logrus.SetLevel(logrus.Level(*loglevel))
 
-	fs, _ := parseFilters()
-	logrus.Debugf("filters: %q", fs)
-	logrus.Debugf("command: %s", *commands)
-
-	inv := &Inventory{}
-
-	content, err := ioutil.ReadFile(*inventory)
+	inv, err := ParseInventory(*inventory)
 	if err != nil {
 		logrus.Error(err)
-	}
-	err = yaml.Unmarshal(content, inv)
-	if err != nil {
-		logrus.Error(err)
+		return
 	}
 
-	logrus.Debugf("Inventory Path: %s Struct: %+v, ", *inventory, inv)
-	// Load complete
+	switch cmd {
+	case run.FullCommand():
+		fs, _ := parseFilters(*runLimits)
+		logrus.Infof("filters: %q", fs)
+		logrus.Infof("command: %s", *runCommand)
 
-	tmpl, err := template.New("test").Parse(inv.Runner)
-	if err != nil {
-		logrus.Error(err)
-	}
+		// Load complete
+		executor := NewExecutor(inv.Runner)
+		for name, item := range inv.Items {
 
-	wg := new(sync.WaitGroup)
-	lines := make(chan string, 32)
-	done := make(chan struct{})
-
-	go output(lines, done)
-
-	for name, elem := range inv.Items {
-		if !fs.isOk(elem) {
-			logrus.Debugf("next elem")
-			continue
+			if !fs.isOk(item) {
+				logrus.Debugf("next elem")
+				continue
+			}
+			executor.Exec(name, *runCommand, item)
 		}
+		executor.Consume(&ConsumeOption{
+			ShowName: *runShowName,
+		})
+		logrus.Info("DONE")
 
-		var cmd bytes.Buffer
-		elem["name"] = name
-		elem["command"] = strings.Join(*commands, " ")
-		err = tmpl.Execute(&cmd, elem)
-		if err != nil {
-			logrus.Error(err)
-		}
-		logrus.Infof("running command: %s to '%s'", name, cmd.String())
-
-		wg.Add(1)
-		go exe_cmd(cmd.String(), wg, lines)
-	}
-
-	wg.Wait()
-	close(lines)
-	<-done
-}
-
-type Inventory struct {
-	Items  map[string]map[string]string
-	Runner string
-}
-
-func exe_cmd(cmd string, wg *sync.WaitGroup, out chan<- string) {
-	defer wg.Done() // Need to signal to waitgroup that this goroutine is done
-
-	parts := strings.Fields(cmd)
-	head := parts[0]
-	parts = parts[1:len(parts)]
-
-	c := exec.Command(head, parts...)
-	var buf = &bytes.Buffer{}
-
-	r := bufio.NewReader(buf)
-	c.Stdout = buf
-	c.Stderr = os.Stderr
-	c.Run()
-	for {
-		line, _, err := r.ReadLine()
-		if err == io.EOF {
-			logrus.Infof("exec end.")
-			return
-		}
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-		out <- string(line)
-	}
-	// send stdout one-line by one-line
-}
-
-type filter map[string]string
-
-func (f filter) isOk(labels map[string]string) bool {
-	for key, value := range f {
-		val, ok := labels[key]
+	case set.FullCommand():
+		old, ok := inv.Items[*setItem]
 		if !ok {
-			return false
+			old = map[string]string{}
 		}
-
-		if val != value {
-			return false
+		for k, v := range *setLabels {
+			old[k] = v
 		}
-	}
-	return true
-}
-func parseFilters() (filters, error) {
-	// TODO error handler
-	filters := []filter{}
+		inv.Items[*setItem] = old
 
-	// AND in same string, OR in other string
-	for _, str := range *limits {
-		f := filter{}
-		arr := strings.Split(str, ",")
-		for _, s := range arr {
-			a := strings.SplitN(s, "=", 2)
-			f[a[0]] = a[1]
+		err := SaveInventory(*inventory, inv)
+		if err != nil {
+			logrus.Error(err)
 		}
-		filters = append(filters, f)
-	}
-	return filters, nil
-}
-
-type filters []filter
-
-func (fs filters) isOk(labels map[string]string) bool {
-	for _, f := range fs {
-		if f.isOk(labels) {
-			return true
+	case get.FullCommand():
+		buf, err := yaml.Marshal(inv.Items[*getItem])
+		if err != nil {
+			logrus.Error(err)
 		}
-	}
-	return false
-}
-func output(lines <-chan string, done chan<- struct{}) {
-	defer close(done)
-	for c := range lines {
-		fmt.Println(c)
+		fmt.Printf("%s\n", buf)
+	case list.FullCommand():
+		fs, _ := parseFilters(*listLimits)
+		logrus.Infof("filters: %q", fs)
+		result := map[string]map[string]string{}
+		for name, item := range inv.Items {
+			if !fs.isOk(item) {
+				logrus.Debugf("next elem")
+				continue
+			}
+			result[name] = item
+		}
+		buf, err := yaml.Marshal(result)
+		if err != nil {
+			logrus.Error(err)
+		}
+		fmt.Printf("%s\n", buf)
 	}
 }
