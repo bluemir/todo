@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
@@ -26,8 +27,9 @@ type Executor interface {
 	Exec(name string, command string, labels map[string]string)
 	Consume(opt *ConsumeOption) error
 }
+
 type ConsumeOption struct {
-	ShowName bool
+	DisplayFormat string
 }
 
 func NewExecutor(runner string) Executor {
@@ -113,7 +115,12 @@ func pipe(out chan<- Line, reader io.Reader, from string, name string, wg *sync.
 	r := bufio.NewScanner(reader)
 	for r.Scan() {
 		logrus.Debugf("read line from %s %s", name, from)
-		out <- Line{name: name, text: r.Text(), from: from, num: ln}
+		out <- Line{
+			Name: name,
+			Text: r.Text(),
+			From: from,
+			Num:  ln,
+		}
 		ln++
 	}
 	if err := r.Err(); err != nil {
@@ -131,15 +138,42 @@ func (se *simple) Consume(opt *ConsumeOption) error {
 		logrus.Debugf("ready to consume")
 		for line := range se.out {
 			logrus.Debugf("get line")
-			if opt.ShowName {
-				fmt.Printf("%s | %05d | %s | %s\n",
-					str.PadLeft(line.name, " ", se.maxNameLen),
-					line.num,
-					line.from,
-					line.text,
+			switch opt.DisplayFormat {
+			case "json":
+				buf, _ := json.Marshal(line)
+				fmt.Printf("%s\n", buf)
+			case "text":
+				fmt.Printf("%s\n", line.Text)
+			case "simple":
+				fmt.Printf("%s %05d | %s\n",
+					str.PadLeft(line.Name, " ", se.maxNameLen),
+					line.Num,
+					line.Text,
 				)
-			} else {
-				fmt.Printf("%s\n", line.text)
+			case "detail":
+				fmt.Printf("%s %05d %s | %s\n",
+					str.PadLeft(line.Name, " ", se.maxNameLen),
+					line.Num,
+					line.From,
+					line.Text,
+				)
+			default:
+				for _, c := range opt.DisplayFormat {
+					switch c {
+					case 'n':
+						fmt.Printf(str.PadLeft(line.Name, " ", se.maxNameLen))
+					case 'i':
+						fmt.Printf("%05d", line.Num)
+					case 'f':
+						fmt.Printf("%s", line.From)
+					case 't':
+						fmt.Printf("%s", line.Text)
+					default:
+						fmt.Printf("%c", c)
+					}
+					fmt.Printf(" ")
+				}
+				fmt.Printf("\n")
 			}
 		}
 	}()

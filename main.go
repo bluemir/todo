@@ -17,11 +17,10 @@ var (
 	loglevel  = app.Flag("verbose", "Log level").Short('v').Counter()
 	inventory = app.Flag("inventory", "Inventory").Short('i').Default(".inventory.yaml").ExistingFile()
 
-	run         = app.Command("run", "running command")
-	runShowName = run.Flag("show-name", "show item name").Short('s').Bool()
-	runFormat   = run.Flag("format", "display format(t: text, i: line number, n: name, f: from)").Default("n | t").Short('f').String()
-	runLimits   = run.Flag("limit", "condition that filter items").Short('l').Strings()
-	runCommand  = run.Arg("command", "commands to run").Required().String()
+	run        = app.Command("run", "running command")
+	runFormat  = run.Flag("format", "display format(json, text, simple, detail or free format").Default("simple").Short('f').String()
+	runLimits  = run.Flag("limit", "condition that filter items").Short('l').Strings()
+	runCommand = run.Arg("command", "commands to run").Required().String()
 
 	set       = app.Command("set", "Set item")
 	setItem   = set.Arg("item", "item name").Required().String()
@@ -66,7 +65,7 @@ func main() {
 			executor.Exec(name, *runCommand, item)
 		}
 		executor.Consume(&ConsumeOption{
-			ShowName: *runShowName,
+			DisplayFormat: *runFormat,
 		})
 		logrus.Info("DONE")
 

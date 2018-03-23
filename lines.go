@@ -1,8 +1,8 @@
 package main
 
 type Line struct {
-	name string
-	text string
-	from string
-	num  uint
+	Name string
+	Text string
+	From string
+	Num  uint
 }
