@@ -9,6 +9,8 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+// TODO output format
+
 var (
 	app       = kingpin.New("todo", "massive runner for server management")
 	debug     = app.Flag("debug", "Enable debug mode.").Bool()
@@ -17,6 +19,7 @@ var (
 
 	run         = app.Command("run", "running command")
 	runShowName = run.Flag("show-name", "show item name").Short('s').Bool()
+	runFormat   = run.Flag("format", "display format(t: text, i: line number, n: name, f: from)").Default("n | t").Short('f').String()
 	runLimits   = run.Flag("limit", "condition that filter items").Short('l').Strings()
 	runCommand  = run.Arg("command", "commands to run").Required().String()
 
@@ -39,7 +42,7 @@ func main() {
 
 	// adjust loglevel
 	logrus.SetOutput(os.Stderr)
-	logrus.SetLevel(logrus.Level(*loglevel))
+	logrus.SetLevel(logrus.Level(*loglevel + 3))
 
 	inv, err := ParseInventory(*inventory)
 	if err != nil {
@@ -56,8 +59,7 @@ func main() {
 		// Load complete
 		executor := NewExecutor(inv.Runner)
 		for name, item := range inv.Items {
-
-			if !fs.isOk(item) {
+			if !fs.isOk(name, item) {
 				logrus.Debugf("next elem")
 				continue
 			}
@@ -93,7 +95,8 @@ func main() {
 		logrus.Infof("filters: %q", fs)
 		result := map[string]map[string]string{}
 		for name, item := range inv.Items {
-			if !fs.isOk(item) {
+
+			if !fs.isOk(name, item) {
 				logrus.Debugf("next elem")
 				continue
 			}

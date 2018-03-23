@@ -1,22 +1,12 @@
 package main
 
-import "strings"
+import (
+	"strings"
+)
 
 type filter map[string]string
+type filters []filter
 
-func (f filter) isOk(labels map[string]string) bool {
-	for key, value := range f {
-		val, ok := labels[key]
-		if !ok {
-			return false
-		}
-
-		if val != value {
-			return false
-		}
-	}
-	return true
-}
 func parseFilters(limits []string) (filters, error) {
 	// TODO error handler
 	filters := []filter{}
@@ -34,16 +24,32 @@ func parseFilters(limits []string) (filters, error) {
 	return filters, nil
 }
 
-type filters []filter
-
-func (fs filters) isOk(labels map[string]string) bool {
+func (fs filters) isOk(name string, labels map[string]string) bool {
 	if len(fs) == 0 {
 		return true
 	}
 	for _, f := range fs {
-		if f.isOk(labels) {
+		if f.isOk(name, labels) {
 			return true
 		}
 	}
 	return false
+}
+func (f filter) isOk(name string, labels map[string]string) bool {
+	for key, value := range f {
+		if key == "name" {
+			if name == value {
+				continue
+			}
+		}
+		val, ok := labels[key]
+		if !ok {
+			return false
+		}
+
+		if val != value {
+			return false
+		}
+	}
+	return true
 }
