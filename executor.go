@@ -145,9 +145,8 @@ func (se *simple) Consume(opt *ConsumeOption) error {
 			case "text":
 				fmt.Printf("%s\n", line.Text)
 			case "simple":
-				fmt.Printf("%s %05d | %s\n",
+				fmt.Printf("%s | %s\n",
 					str.PadLeft(line.Name, " ", se.maxNameLen),
-					line.Num,
 					line.Text,
 				)
 			case "detail":
