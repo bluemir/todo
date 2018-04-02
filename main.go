@@ -32,6 +32,11 @@ var (
 	list       = app.Command("list", "list item")
 	listLimits = list.Flag("limit", "condition that filter items").Short('l').Strings()
 	//listShowLabel = list.GetFlag
+
+	exe        = app.Command("exec", "exec")
+	exeLimits  = exe.Flag("limit", "condition that filter items").Short('l').Strings()
+	exeFormat  = exe.Flag("format", "display format(json, text, simple, detail or free format").Default("simple").Short('f').String()
+	exeCommand = exe.Arg("command", "command").Required().String()
 )
 var VERSION string
 
@@ -106,5 +111,23 @@ func main() {
 			logrus.Error(err)
 		}
 		fmt.Printf("%s\n", buf)
+	case exe.FullCommand():
+		fs, _ := parseFilters(*exeLimits)
+		logrus.Infof("filters: %q", fs)
+		logrus.Infof("command: %s", *exeCommand)
+
+		// Load complete
+		executor := NewExecutor(*exeCommand)
+		for name, item := range inv.Items {
+			if !fs.isOk(name, item) {
+				logrus.Debugf("next elem")
+				continue
+			}
+			executor.Exec(name, "", item)
+		}
+		executor.Consume(&ConsumeOption{
+			DisplayFormat: *exeFormat,
+		})
+		logrus.Info("DONE")
 	}
 }
