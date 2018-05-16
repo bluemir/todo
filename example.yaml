@@ -16,7 +16,6 @@ items:
     cluster: web
     role: worker
 runner:  "ssh -n {{.addr}} -C {{.command}}"
-#runner: "rsh -n -l irteamsu {{.name}} {{.command}}"
 # usage:
 # cluster=web AND role=manager
 # todo -l cluster=web,role=manager -- sudo journalctl -u docker --since -20h
