@@ -8,9 +8,10 @@ import (
 )
 
 type Inventory struct {
-	Items  map[string]map[string]string
+	Items  map[string]Item
 	Runner string
 }
+type Item map[string]string
 
 func ParseInventory(filename string) (*Inventory, error) {
 	inv := &Inventory{}
@@ -21,6 +22,9 @@ func ParseInventory(filename string) (*Inventory, error) {
 	err = yaml.Unmarshal(content, inv)
 	if err != nil {
 		return nil, err
+	}
+	if inv.Items == nil {
+		inv.Items = map[string]Item{}
 	}
 
 	logrus.Infof("Inventory Path: %s Struct: %+v, ", filename, inv)
@@ -34,5 +38,4 @@ func SaveInventory(filename string, inv *Inventory) error {
 	}
 
 	return ioutil.WriteFile(filename, buf, 644)
-
 }

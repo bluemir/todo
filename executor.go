@@ -3,184 +3,107 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
-	"fmt"
+	"context"
 	"io"
 	"os/exec"
-	"sync"
 	"text/template"
 
 	"github.com/mgutz/str"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
-/*
-
-executor := NewExecutor()
-for i := range item {
-	executor.Exec(name, command, labels)
-}
-executor.Consume(option);
-
-*/
-type Executor interface {
-	Exec(name string, command string, labels map[string]string)
-	Consume(opt *ConsumeOption) error
+type textCollector struct {
+	formatter Formatter
 }
 
-type ConsumeOption struct {
-	DisplayFormat string
-}
-
-func NewExecutor(runner string) Executor {
-	logrus.Infof("runner '%s'", runner)
-	tmpl, err := template.New("__").Parse(runner)
+func (c *textCollector) Add(name string, cmd *exec.Cmd) (<-chan struct{}, error) {
+	done := make(chan struct{})
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		logrus.Error(err)
+		logrus.Warn("pipe stdout", err)
+		return nil, err
 	}
-	return &simple{
-		out:  make(chan Line, 32),
-		wg:   new(sync.WaitGroup),
-		tmpl: tmpl,
-	}
-}
-
-type simple struct {
-	out        chan Line
-	wg         *sync.WaitGroup
-	tmpl       *template.Template
-	maxNameLen int
-}
-
-func (se *simple) Exec(name string, command string, labels map[string]string) {
-	// async running command
-	se.wg.Add(1)
-
-	if se.maxNameLen < len(name) {
-		se.maxNameLen = len(name)
-	}
-
-	var cmd bytes.Buffer
-
-	labels["name"] = name
-	labels["command"] = command
-
-	err := se.tmpl.Execute(&cmd, labels)
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		logrus.Error(err)
+		logrus.Warn("pipe stderr", err)
+		return nil, err
 	}
 
-	logrus.Infof("running command: %s to '%s'", name, cmd.String())
-	go func(out chan<- Line, cmd string) {
-		defer se.wg.Done()
-		parts := str.ToArgv(cmd)
-		logrus.Debugf("%+v", parts)
+	go func() {
+		defer close(done)
 
-		c := exec.Command(parts[0], parts[1:]...)
-
-		stdout, err := c.StdoutPipe()
-		if err != nil {
-			logrus.Warn("pipe stdout", err)
+		eg, _ := errgroup.WithContext(context.Background())
+		eg.Go(func() error { return c.read(name, "stdout", stdout) })
+		eg.Go(func() error { return c.read(name, "stderr", stderr) })
+		if err := eg.Wait(); err != nil {
+			logrus.Error(err)
 		}
-		stderr, err := c.StderrPipe()
-		if err != nil {
-			logrus.Warn("pipe stderr", err)
-		}
-
-		//se.wg.Add(2)
-
-		wg := &sync.WaitGroup{}
-		wg.Add(2)
-		go pipe(out, stdout, "stdout", name, wg)
-		go pipe(out, stderr, "stderr", name, wg)
-
-		err = c.Start()
-		if err != nil {
-			logrus.Warn(err)
-		}
-
-		// read line -> out
-		wg.Wait()
-
-		err = c.Wait()
-		if err != nil {
-			logrus.Warn(err)
-		}
-		logrus.Debugf("Exec done: %s", cmd)
-	}(se.out, cmd.String())
+	}()
+	return done, nil
 }
-func pipe(out chan<- Line, reader io.Reader, from string, name string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (c *textCollector) read(name, from string, reader io.Reader) error {
 	ln := uint(1)
 	r := bufio.NewScanner(reader)
 	for r.Scan() {
 		logrus.Debugf("read line from %s %s", name, from)
-		out <- Line{
-			Name: name,
-			Text: r.Text(),
-			From: from,
-			Num:  ln,
-		}
+		c.formatter.Out(ln, name, from, r.Text())
 		ln++
 	}
 	if err := r.Err(); err != nil {
 		logrus.Errorf("read line error %s %s: %q", name, from, err)
-		return
+		return err
 	}
 	logrus.Debugf("end of stream")
-	// TODO call c.wait
+	return nil
 }
 
-func (se *simple) Consume(opt *ConsumeOption) error {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		logrus.Debugf("ready to consume")
-		for line := range se.out {
-			logrus.Debugf("get line")
-			switch opt.DisplayFormat {
-			case "json":
-				buf, _ := json.Marshal(line)
-				fmt.Printf("%s\n", buf)
-			case "text":
-				fmt.Printf("%s\n", line.Text)
-			case "simple":
-				fmt.Printf("%s | %s\n",
-					str.PadLeft(line.Name, " ", se.maxNameLen),
-					line.Text,
-				)
-			case "detail":
-				fmt.Printf("%s %05d %s | %s\n",
-					str.PadLeft(line.Name, " ", se.maxNameLen),
-					line.Num,
-					line.From,
-					line.Text,
-				)
-			default:
-				for _, c := range opt.DisplayFormat {
-					switch c {
-					case 'n':
-						fmt.Printf(str.PadLeft(line.Name, " ", se.maxNameLen))
-					case 'i':
-						fmt.Printf("%05d", line.Num)
-					case 'f':
-						fmt.Printf("%s", line.From)
-					case 't':
-						fmt.Printf("%s", line.Text)
-					default:
-						fmt.Printf("%c", c)
-					}
-					fmt.Printf(" ")
-				}
-				fmt.Printf("\n")
-			}
+type Runner struct {
+	tmpl    string
+	command string
+}
+
+func (r *Runner) Run(out *textCollector, items ...Item) error {
+	tmpl, err := template.New("__").Funcs(map[string]interface{}{
+		"command": func() string {
+			return r.command
+		},
+	}).Parse(r.tmpl)
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	eg, _ := errgroup.WithContext(context.Background())
+	for _, item := range items {
+		eg.Go(rc(out, tmpl, item))
+	}
+	return eg.Wait()
+}
+func rc(out *textCollector, tmpl *template.Template, item Item) func() error {
+	return func() error {
+		var cmd bytes.Buffer
+
+		err := tmpl.Execute(&cmd, item)
+		if err != nil {
+			return err
 		}
-	}()
-	se.wg.Wait()
-	// done
-	// but there is Lines to read
-	// MUST close end of read...
-	close(se.out)
-	<-done
-	return nil
+
+		parts := str.ToArgv(cmd.String())
+		logrus.Debugf("%+v", parts)
+
+		c := exec.Command(parts[0], parts[1:]...)
+
+		done, err := out.Add(item["name"], c)
+		if err != nil {
+			return err
+		}
+
+		if err := c.Start(); err != nil {
+			return err
+		}
+
+		<-done
+
+		return c.Wait()
+	}
 }
