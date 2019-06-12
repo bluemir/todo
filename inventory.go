@@ -9,7 +9,10 @@ import (
 
 type Inventory struct {
 	Items  map[string]Item
-	Runner string
+	Runner struct {
+		Exec string
+		Copy string
+	}
 }
 type Item map[string]string
 

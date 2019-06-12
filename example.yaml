@@ -1,7 +1,7 @@
 items:
   swarm-manager01:
     addr: mng01.swarm.bluemir.me
-    cluster: web 
+    cluster: web
     role: manager
   swarm-manager01:
     addr: mng02.swarm.bluemir.me
@@ -15,11 +15,14 @@ items:
     addr: worker02.swarm.bluemir.me
     cluster: web
     role: worker
-runner:  "ssh -n {{.addr}} -C {{.command}}"
+runner:
+  exec: "ssh -n {{.addr}} -C {{command}}"
+  copy: "scp {{.src}} {{.addr}}:{{.dest}}"
+
 # usage:
 # cluster=web AND role=manager
 # todo -l cluster=web,role=manager -- sudo journalctl -u docker --since -20h
 # role=worker OR role=manager
 # todo -l role=worker -l role=manager -- sudo journalctl -u docker --sicne -20h
-# (cluster=web AND role=manager) OR name=swarm-worker02 
+# (cluster=web AND role=manager) OR name=swarm-worker02
 # todo -l cluster=web,role=manager -l name=swarm-worker02  -- sudo systemctl restart docker

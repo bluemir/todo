@@ -20,7 +20,7 @@ DIRS = $(shell find . -name dist -prune -o -name ".git" -prune -o -type d -print
 	@echo $(DIRS) makefile \
 		$(GO_SOURCES) | tr " " "\n"
 run: $(BIN_NAME)
-	./$(BIN_NAME)
+	./$(BIN_NAME) -vvvv -i example.yaml run --dry-run -- 'hey something'
 auto-run:
 	while true; do \
 		make .sources | entr -rd make run ;  \

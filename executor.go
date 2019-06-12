@@ -13,57 +13,13 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type textCollector struct {
-	formatter Formatter
-}
-
-func (c *textCollector) Add(name string, cmd *exec.Cmd) (<-chan struct{}, error) {
-	done := make(chan struct{})
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		logrus.Warn("pipe stdout", err)
-		return nil, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		logrus.Warn("pipe stderr", err)
-		return nil, err
-	}
-
-	go func() {
-		defer close(done)
-
-		eg, _ := errgroup.WithContext(context.Background())
-		eg.Go(func() error { return c.read(name, "stdout", stdout) })
-		eg.Go(func() error { return c.read(name, "stderr", stderr) })
-		if err := eg.Wait(); err != nil {
-			logrus.Error(err)
-		}
-	}()
-	return done, nil
-}
-func (c *textCollector) read(name, from string, reader io.Reader) error {
-	ln := uint(1)
-	r := bufio.NewScanner(reader)
-	for r.Scan() {
-		logrus.Debugf("read line from %s %s", name, from)
-		c.formatter.Out(ln, name, from, r.Text())
-		ln++
-	}
-	if err := r.Err(); err != nil {
-		logrus.Errorf("read line error %s %s: %q", name, from, err)
-		return err
-	}
-	logrus.Debugf("end of stream")
-	return nil
-}
-
 type Runner struct {
 	tmpl    string
 	command string
+	dryRun  bool
 }
 
-func (r *Runner) Run(out *textCollector, items ...Item) error {
+func (r *Runner) Run(formatter Formatter, items ...Item) error {
 	tmpl, err := template.New("__").Funcs(map[string]interface{}{
 		"command": func() string {
 			return r.command
@@ -73,14 +29,8 @@ func (r *Runner) Run(out *textCollector, items ...Item) error {
 		logrus.Error(err)
 	}
 
-	eg, _ := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(context.Background())
 	for _, item := range items {
-		eg.Go(rc(out, tmpl, item))
-	}
-	return eg.Wait()
-}
-func rc(out *textCollector, tmpl *template.Template, item Item) func() error {
-	return func() error {
 		var cmd bytes.Buffer
 
 		err := tmpl.Execute(&cmd, item)
@@ -89,21 +39,46 @@ func rc(out *textCollector, tmpl *template.Template, item Item) func() error {
 		}
 
 		parts := str.ToArgv(cmd.String())
-		logrus.Debugf("%+v", parts)
+		logrus.Debugf("cmd: %+v", cmd.String())
+		logrus.Debugf("part: %+v", parts)
 
-		c := exec.Command(parts[0], parts[1:]...)
+		if r.dryRun {
+			parts = append([]string{"echo"}, parts...)
+		}
 
-		done, err := out.Add(item["name"], c)
+		c := exec.CommandContext(ctx, parts[0], parts[1:]...)
+		defer c.Wait()
+
+		stdout, err := c.StdoutPipe()
 		if err != nil {
+			logrus.Warn("pipe stdout", err)
+			return err
+		}
+		stderr, err := c.StderrPipe()
+		if err != nil {
+			logrus.Warn("pipe stderr", err)
 			return err
 		}
 
-		if err := c.Start(); err != nil {
-			return err
-		}
+		eg.Go(func() error { return read(item["name"], "stdout", stdout, formatter) })
+		eg.Go(func() error { return read(item["name"], "stderr", stderr, formatter) })
 
-		<-done
-
-		return c.Wait()
+		eg.Go(c.Start)
 	}
+	return eg.Wait()
+}
+func read(name, from string, reader io.Reader, formatter Formatter) error {
+	ln := uint(1)
+	r := bufio.NewScanner(reader)
+	for r.Scan() {
+		logrus.Debugf("read line from %s %s", name, from)
+		formatter.Out(ln, name, from, r.Text())
+		ln++
+	}
+	if err := r.Err(); err != nil {
+		logrus.Errorf("read line error %s %s: %q", name, from, err)
+		return err
+	}
+	logrus.Debugf("end of stream")
+	return nil
 }

@@ -88,8 +88,8 @@ type Filters struct {
 	}
 }
 
-func (fs *Filters) filter(items map[string]Item) []Item {
-	result := []Item{}
+func (fs *Filters) filter(items map[string]Item) map[string]Item {
+	result := map[string]Item{}
 	for name, item := range items {
 		item["name"] = name
 	NextFilter:
@@ -99,7 +99,7 @@ func (fs *Filters) filter(items map[string]Item) []Item {
 					continue NextFilter
 				}
 			}
-			result = append(result, item)
+			result[name] = item
 			break
 		}
 	}
