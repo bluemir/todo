@@ -19,7 +19,7 @@ items:
     addr: localhost
     cluster: local
 runner:
-  exec: ssh -n {{.addr}} -C "{{.command}}"
+  exec: ssh -n {{.addr}} -C {{.command}}
   copy: scp {{.src}} {{.addr}}:{{.dest}}
 
 # usage:

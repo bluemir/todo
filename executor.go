@@ -19,36 +19,31 @@ type Runner struct {
 	dryRun   bool
 }
 
-func (r *Runner) Run(formatter Formatter, items ...Item) error {
+func (r *Runner) parts() ([]*template.Template, error) {
 	parts := str.ToArgv(r.tmpl)
-
 	tParts := []*template.Template{}
-
 	for n, part := range parts {
 		tmpl, err := template.New(part).Parse(part)
 		if err != nil {
 			logrus.Error(err)
-			return err
+			return nil, err
 		}
 		tParts = append(tParts, tmpl)
 		logrus.Debugf("%d %s", n, part)
 	}
+	return tParts, nil
+}
+func (r *Runner) Run(formatter Formatter, items ...Item) error {
+	templates, err := r.parts()
+	if err != nil {
+		return err
+	}
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	for _, item := range items {
-		result := []string{}
-		for _, tmpl := range tParts {
-			if tmpl.Name() == "{{.command}}" {
-				result = append(result, r.commands...)
-				continue
-			}
-			var cmd bytes.Buffer
-			err := tmpl.Execute(&cmd, item)
-			if err != nil {
-				logrus.Error(err)
-				return err
-			}
-			result = append(result, cmd.String())
+		result, err := render(templates, r.commands, item)
+		if err != nil {
+			return err
 		}
 
 		logrus.Debugf("cmd:")
@@ -80,6 +75,23 @@ func (r *Runner) Run(formatter Formatter, items ...Item) error {
 		eg.Go(c.Start)
 	}
 	return eg.Wait()
+}
+func render(t []*template.Template, commands []string, item Item) ([]string, error) {
+	result := []string{}
+	for _, tmpl := range t {
+		if tmpl.Name() == "{{.command}}" {
+			result = append(result, commands...)
+			continue
+		}
+		var cmd bytes.Buffer
+		err := tmpl.Execute(&cmd, item)
+		if err != nil {
+			logrus.Error(err)
+			return nil, err
+		}
+		result = append(result, cmd.String())
+	}
+	return result, nil
 }
 func read(name, from string, reader io.Reader, formatter Formatter) error {
 	ln := uint(1)
