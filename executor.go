@@ -14,39 +14,53 @@ import (
 )
 
 type Runner struct {
-	tmpl    string
-	command string
-	dryRun  bool
+	tmpl     string
+	commands []string
+	dryRun   bool
 }
 
 func (r *Runner) Run(formatter Formatter, items ...Item) error {
-	tmpl, err := template.New("__").Funcs(map[string]interface{}{
-		"command": func() string {
-			return r.command
-		},
-	}).Parse(r.tmpl)
-	if err != nil {
-		logrus.Error(err)
+	parts := str.ToArgv(r.tmpl)
+
+	tParts := []*template.Template{}
+
+	for n, part := range parts {
+		tmpl, err := template.New(part).Parse(part)
+		if err != nil {
+			logrus.Error(err)
+			return err
+		}
+		tParts = append(tParts, tmpl)
+		logrus.Debugf("%d %s", n, part)
 	}
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	for _, item := range items {
-		var cmd bytes.Buffer
-
-		err := tmpl.Execute(&cmd, item)
-		if err != nil {
-			return err
+		result := []string{}
+		for _, tmpl := range tParts {
+			if tmpl.Name() == "{{.command}}" {
+				result = append(result, r.commands...)
+				continue
+			}
+			var cmd bytes.Buffer
+			err := tmpl.Execute(&cmd, item)
+			if err != nil {
+				logrus.Error(err)
+				return err
+			}
+			result = append(result, cmd.String())
 		}
 
-		parts := str.ToArgv(cmd.String())
-		logrus.Debugf("cmd: %+v", cmd.String())
-		logrus.Debugf("part: %+v", parts)
+		logrus.Debugf("cmd:")
+		for n, c := range result {
+			logrus.Debugf("%d: %s", n, c)
+		}
 
 		if r.dryRun {
-			parts = append([]string{"echo"}, parts...)
+			result = append([]string{"echo"}, result...)
 		}
 
-		c := exec.CommandContext(ctx, parts[0], parts[1:]...)
+		c := exec.CommandContext(ctx, result[0], result[1:]...)
 		defer c.Wait()
 
 		stdout, err := c.StdoutPipe()

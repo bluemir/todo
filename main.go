@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -59,31 +58,7 @@ func main() {
 
 	switch cmd {
 	case run.FullCommand():
-		fs, _ := parseFilters(*runLimits)
-
-		logrus.Infof("filters: %q", fs)
-		logrus.Infof("command: %s", *runCommand)
-
-		r := inv.Runner.Exec
-		if *runTemplate != "" {
-			r = *runTemplate
-		}
-
-		runner := &Runner{
-			tmpl:    r,
-			command: strings.Join(*runCommand, " "),
-			dryRun:  *runDryrun,
-		}
-		items := fs.filter(inv.Items)
-		formatter := NewFormatter(*runFormat, items)
-
-		err := runner.Run(formatter, items...)
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-
-		logrus.Info("DONE")
+		handleRun(inv)
 
 	case set.FullCommand():
 		for _, name := range *setItem {

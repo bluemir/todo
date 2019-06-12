@@ -15,9 +15,12 @@ items:
     addr: worker02.swarm.bluemir.me
     cluster: web
     role: worker
+  local:
+    addr: localhost
+    cluster: local
 runner:
-  exec: "ssh -n {{.addr}} -C {{command}}"
-  copy: "scp {{.src}} {{.addr}}:{{.dest}}"
+  exec: ssh -n {{.addr}} -C "{{.command}}"
+  copy: scp {{.src}} {{.addr}}:{{.dest}}
 
 # usage:
 # cluster=web AND role=manager
