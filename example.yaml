@@ -4,7 +4,7 @@ items:
     cluster: web
     role: manager
   swarm-manager01:
-    addr: mng02.swarm.bluemir.me
+    addr: mng01.swarm.bluemir.me
     cluster: web
     role: manager
   swarm-worker01:
@@ -19,8 +19,8 @@ items:
     addr: localhost
     cluster: local
 runner:
-  exec: ssh -n {{.addr}} -C {{.command}}
-  copy: scp {{.src}} {{.addr}}:{{.dest}}
+  run: ssh -n {{.addr}} -C {{command}}
+  copy: scp {{src}} {{.addr}}:{{dest}}
 
 # usage:
 # cluster=web AND role=manager

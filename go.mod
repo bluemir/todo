@@ -6,6 +6,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/mgutz/str v1.2.0
 	github.com/sirupsen/logrus v1.4.1
+	github.com/stretchr/testify v1.2.2
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.2.2 // indirect

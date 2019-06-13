@@ -26,12 +26,13 @@ var (
 
 	cp       = app.Command("cp", "copy file")
 	cpLimits = cp.Flag("limit", "condition that filter items").Short('l').Strings()
-	cpSrc    = cp.Arg("file", "source file").Required().Strings()
+	cpDryrun = cp.Flag("dry-run", "Dry Run").Default("false").Bool()
+	cpSrc    = cp.Arg("src-file", "source file").Required().String()
+	cpDest   = cp.Arg("dest-file", "dest file").Required().String()
 
-	set          = app.Command("set", "Put item")
-	setLabels    = set.Flag("label", "labels").Short('l').StringMap()
-	setInputFile = set.Flag("input-file", "input file").File()
-	setItem      = set.Arg("item", "items").Required().Strings()
+	set       = app.Command("set", "Put item")
+	setLabels = set.Flag("label", "labels").Short('l').StringMap()
+	setItem   = set.Arg("item", "items").Required().Strings()
 
 	get     = app.Command("get", "Get item")
 	getItem = get.Arg("item", "item name").Required().String()
@@ -59,25 +60,10 @@ func main() {
 	switch cmd {
 	case run.FullCommand():
 		handleRun(inv)
-
+	case cp.FullCommand():
+		handleCp(inv)
 	case set.FullCommand():
-		for _, name := range *setItem {
-			old, ok := inv.Items[name]
-			if !ok {
-				old = map[string]string{}
-			}
-
-			for k, v := range *setLabels {
-				old[k] = v
-			}
-
-			inv.Items[name] = old
-		}
-		err := SaveInventory(*inventory, inv)
-		if err != nil {
-			logrus.Error(err)
-		}
-
+		handleSet(inv)
 	case get.FullCommand():
 		buf, err := yaml.Marshal(inv.Items[*getItem])
 		if err != nil {
