@@ -27,17 +27,24 @@ Commands:
   help [<command>...]
     Show help.
 
-  run [<flags>] <command>
+  exec [<flags>] <command>...
+    running raw command
+
+  run [<flags>] <command>...
     running command
 
-  set <item> [<label>...]
-    Set item
+  cp [<flags>] <src-file> <dest-file>
+    copy file
+
+  set [<flags>] <item>...
+    Put item
 
   get <item>
     Get item
 
   list [<flags>]
     list item
+
 ```
 
 ## EXAMPLE
@@ -51,5 +58,9 @@ todo run -i example.yaml --show-name -l cluster=web,role=manager -- 'journalctl 
 todo set newworker cluster=web role=worker
 # get item from inventory
 todo get swarm-manager01
+
+# Sometimes, run command in local
+# get server list with address and label
+todo exec -i example.yaml -- echo {{.name}} {{.addr}} {{.cluster}}
 ```
 
