@@ -1,8 +1,33 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 )
+
+func handleExec(inv *Inventory) {
+	fs, _ := parseFilters(*execLimit)
+
+	logrus.Infof("filters: %q", fs)
+	logrus.Infof("command: %s", *execCommand)
+
+	runner := &Runner{
+		args:   *execCommand,
+		dryRun: *execDryrun,
+	}
+	items := fs.filter(inv.Items)
+	formatter := NewFormatter(*execFormat, items)
+
+	err := runner.Run(formatter, items...)
+	if err != nil {
+		logrus.Error(err)
+		return
+	}
+
+	logrus.Info("DONE")
+}
 
 func handleRun(inv *Inventory) {
 	fs, _ := parseFilters(*runLimits)
@@ -78,4 +103,37 @@ func handleSet(inv *Inventory) {
 	if err != nil {
 		logrus.Error(err)
 	}
+}
+func handleGet(inv *Inventory) {
+	buf, err := yaml.Marshal(inv.Items[*getItem])
+	if err != nil {
+		logrus.Error(err)
+	}
+	fmt.Printf("%s\n", buf)
+}
+func handleList(inv *Inventory) {
+	fs, _ := parseFilters(*listLimits)
+	logrus.Infof("filters: %q", fs)
+	items := fs.filter(inv.Items)
+	result := map[string]map[string]string{}
+	for _, item := range items {
+		var name = item["name"]
+		delete(item, "name")
+		result[name] = item
+	}
+	switch *listFormat {
+	case "yaml":
+		buf, err := yaml.Marshal(result)
+		if err != nil {
+			logrus.Error(err)
+		}
+		fmt.Printf("%s\n", buf)
+	case "simple":
+		for name := range result {
+			fmt.Println(name)
+		}
+	default:
+		logrus.Error("unknown format")
+	}
+
 }

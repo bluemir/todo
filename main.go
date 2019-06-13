@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -16,6 +14,12 @@ var (
 	debug     = app.Flag("debug", "Enable debug mode.").Bool()
 	loglevel  = app.Flag("verbose", "Log level").Short('v').Counter()
 	inventory = app.Flag("inventory", "Inventory").Short('i').Default(".inventory.yaml").ExistingFile()
+
+	exe         = app.Command("exec", "running raw command")
+	execFormat  = exe.Flag("format", "display format(json, text, simple, detail or free format)").Default("simple").Short('f').String()
+	execLimit   = exe.Flag("limit", "condition that filter items").Short('l').Strings()
+	execDryrun  = exe.Flag("dry-run", "Dry Run").Default("false").Bool()
+	execCommand = exe.Arg("command", "commands to run").Required().Strings()
 
 	run         = app.Command("run", "running command")
 	runFormat   = run.Flag("format", "display format(json, text, simple, detail or free format)").Default("simple").Short('f').String()
@@ -58,6 +62,8 @@ func main() {
 	}
 
 	switch cmd {
+	case exe.FullCommand():
+		handleExec(inv)
 	case run.FullCommand():
 		handleRun(inv)
 	case cp.FullCommand():
@@ -65,34 +71,8 @@ func main() {
 	case set.FullCommand():
 		handleSet(inv)
 	case get.FullCommand():
-		buf, err := yaml.Marshal(inv.Items[*getItem])
-		if err != nil {
-			logrus.Error(err)
-		}
-		fmt.Printf("%s\n", buf)
+		handleGet(inv)
 	case list.FullCommand():
-		fs, _ := parseFilters(*listLimits)
-		logrus.Infof("filters: %q", fs)
-		items := fs.filter(inv.Items)
-		result := map[string]map[string]string{}
-		for _, item := range items {
-			var name = item["name"]
-			delete(item, "name")
-			result[name] = item
-		}
-		switch *listFormat {
-		case "yaml":
-			buf, err := yaml.Marshal(result)
-			if err != nil {
-				logrus.Error(err)
-			}
-			fmt.Printf("%s\n", buf)
-		case "simple":
-			for name := range result {
-				fmt.Println(name)
-			}
-		default:
-			logrus.Error("unknown format")
-		}
+		handleList(inv)
 	}
 }
