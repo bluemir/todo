@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -20,7 +21,7 @@ func handleExec(inv *Inventory) {
 	items := fs.filter(inv.Items)
 	formatter := NewFormatter(*execFormat, items)
 
-	err := runner.Run(formatter, items...)
+	err := runner.Run(formatter, map[string]string{}, items...)
 	if err != nil {
 		logrus.Error(err)
 		return
@@ -51,7 +52,7 @@ func handleRun(inv *Inventory) {
 	items := fs.filter(inv.Items)
 	formatter := NewFormatter(*runFormat, items)
 
-	err := runner.Run(formatter, items...)
+	err := runner.Run(formatter, map[string]string{"command": strings.Join(*runCommand, " ")}, items...)
 	if err != nil {
 		logrus.Error(err)
 		return
@@ -78,7 +79,10 @@ func handleCp(inv *Inventory) {
 	items := fs.filter(inv.Items)
 	formatter := NewFormatter(*runFormat, items)
 
-	err := runner.Run(formatter, items...)
+	err := runner.Run(formatter, map[string]string{
+		"src":  *cpSrc,
+		"dest": *cpDest,
+	}, items...)
 	if err != nil {
 		logrus.Error(err)
 		return
