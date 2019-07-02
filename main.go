@@ -57,30 +57,24 @@ func main() {
 	logrus.SetOutput(os.Stderr)
 	logrus.SetLevel(logrus.Level(conf.LogLevel + 3))
 
+	var err error
 	switch cmd {
 	case exec.FullCommand():
-		if err := conf.Exec(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.Exec()
 	case run.FullCommand():
-		if err := conf.Run(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.Run()
 	case cp.FullCommand():
-		if err := conf.Copy(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.Copy()
 	case set.FullCommand():
-		if err := conf.Set(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.Set()
 	case get.FullCommand():
-		if err := conf.Get(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.Get()
 	case list.FullCommand():
-		if err := conf.List(); err != nil {
-			logrus.Error(err)
-		}
+		err = conf.List()
 	}
+
+	if err != nil {
+		logrus.Error(err)
+	}
+
 }
