@@ -1,4 +1,4 @@
-package main
+package pkg
 
 import (
 	"bufio"
@@ -38,10 +38,19 @@ func toArgs(tmplStr string, opts map[string][]string) []string {
 	return result
 }
 
-func (r *Runner) parts() ([]*template.Template, error) {
+func (r *Runner) parts(opt map[string]string) ([]*template.Template, error) {
+	// TODO funcMap
+	fMap := map[string]interface{}{}
+
+	for k, v := range opt {
+		fMap[k] = func() string {
+			return v
+		}
+	}
+
 	tParts := []*template.Template{}
 	for n, part := range r.args {
-		tmpl, err := template.New("__").Parse(part)
+		tmpl, err := template.New("__").Funcs(fMap).Parse(part)
 		if err != nil {
 			logrus.Error(err)
 			return nil, err
@@ -51,8 +60,8 @@ func (r *Runner) parts() ([]*template.Template, error) {
 	}
 	return tParts, nil
 }
-func (r *Runner) Run(formatter Formatter, items ...Item) error {
-	templates, err := r.parts()
+func (r *Runner) Run(formatter Formatter, opts map[string]string, items ...Item) error {
+	templates, err := r.parts(opts)
 	if err != nil {
 		return err
 	}
