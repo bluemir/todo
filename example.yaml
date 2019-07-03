@@ -1,8 +1,7 @@
-items:
-  swarm-manager01:
-    addr: mng01.swarm.bluemir.me
-    cluster: web
-    role: manager
+Items:
+  local:
+    addr: localhost
+    cluster: local
   swarm-manager01:
     addr: mng01.swarm.bluemir.me
     cluster: web
@@ -15,17 +14,9 @@ items:
     addr: worker02.swarm.bluemir.me
     cluster: web
     role: worker
-  local:
-    addr: localhost
-    cluster: local
-runner:
-  run: ssh -n {{.addr}} -C {{command}}
-  copy: scp {{src}} {{.addr}}:{{dest}}
-
-# usage:
-# cluster=web AND role=manager
-# todo -l cluster=web,role=manager -- sudo journalctl -u docker --since -20h
-# role=worker OR role=manager
-# todo -l role=worker -l role=manager -- sudo journalctl -u docker --sicne -20h
-# (cluster=web AND role=manager) OR name=swarm-worker02
-# todo -l cluster=web,role=manager -l name=swarm-worker02  -- sudo systemctl restart docker
+Templates:
+  rsh: 'rsh {{.addr}} {{args}}'
+  scp: 'scp {{arg 1}} {{.addr}}:{{arg 2}}'
+  ssh: 'ssh -n {{.addr}} -C {{args}}'
+  test: 'echo name={{.addr}} arg1="{{arg 1}}" arg2="{{arg 2}}"'
+  #default: '{{args}}'

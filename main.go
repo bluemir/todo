@@ -19,24 +19,12 @@ func main() {
 	app.Flag("verbose", "Log level").Short('v').CounterVar(&conf.LogLevel)
 	app.Flag("inventory", "Inventory").Short('i').Default(".inventory.yaml").ExistingFileVar(&conf.Inventory)
 
-	exec := app.Command("exec", "running raw command")
+	exec := app.Command("exec", "running command (alias run)").Alias("run")
 	exec.Flag("format", "display format(json, text, simple, detail or free format)").Default("simple").Short('f').StringVar(&conf.Format)
 	exec.Flag("limit", "condition that filter items").Short('l').StringsVar(&conf.Limit)
 	exec.Flag("dry-run", "Dry Run").Default("false").BoolVar(&conf.DryRun)
-	exec.Arg("command", "commands to run").Required().StringsVar(&conf.Command)
-
-	run := app.Command("run", "running command")
-	run.Flag("format", "display format(json, text, simple, detail or free format)").Default("simple").Short('f').StringVar(&conf.Format)
-	run.Flag("limit", "condition that filter items").Short('l').StringsVar(&conf.Limit)
-	run.Flag("runner", "").Short('r').StringVar(&conf.Template)
-	run.Flag("dry-run", "Dry Run").Default("false").BoolVar(&conf.DryRun)
-	run.Arg("command", "commands to run").Required().StringsVar(&conf.Command)
-
-	cp := app.Command("cp", "copy file")
-	cp.Flag("limit", "condition that filter items").Short('l').StringsVar(&conf.Limit)
-	cp.Flag("dry-run", "Dry Run").Default("false").BoolVar(&conf.DryRun)
-	cp.Arg("src-file", "source file").Required().StringVar(&conf.Src)
-	cp.Arg("dest-file", "dest file").Required().StringVar(&conf.Dest)
+	exec.Flag("templates", "running template").Short('t').Default("default").StringVar(&conf.Template)
+	exec.Arg("args", "args to run").StringsVar(&conf.Args)
 
 	set := app.Command("set", "Put item")
 	set.Flag("label", "labels").Short('l').StringMapVar(&conf.Labels)
@@ -61,10 +49,6 @@ func main() {
 	switch cmd {
 	case exec.FullCommand():
 		err = conf.Exec()
-	case run.FullCommand():
-		err = conf.Run()
-	case cp.FullCommand():
-		err = conf.Copy()
 	case set.FullCommand():
 		err = conf.Set()
 	case get.FullCommand():
@@ -76,5 +60,4 @@ func main() {
 	if err != nil {
 		logrus.Error(err)
 	}
-
 }

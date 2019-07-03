@@ -2,7 +2,6 @@ package pkg
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -14,28 +13,22 @@ type AppConfig struct {
 	LogLevel  int
 	Inventory string
 
-	// run exec cp
-	DryRun bool
-	Limit  []string
-
-	// run exec
-	Format  string
-	Command []string
-
+	// exec
+	DryRun   bool
+	Limit    []string
+	Format   string
+	Args     []string
 	Template string
 
-	// cp
-	Src  string
-	Dest string
-
-	// set
+	// set get list
 	Labels    map[string]string
 	ItemNames []string
-	//
 }
 
 func NewAppConfig() *AppConfig {
-	return &AppConfig{}
+	return &AppConfig{
+		Labels: map[string]string{},
+	}
 }
 
 func (conf *AppConfig) Exec() error {
@@ -47,43 +40,12 @@ func (conf *AppConfig) Exec() error {
 	fs, _ := parseFilters(conf.Limit)
 
 	logrus.Infof("filters: %q", fs)
-	logrus.Infof("command: %s", conf.Command)
+	logrus.Infof("args: %s", conf.Args)
+	logrus.Infof("templates: %s", conf.Template)
 
-	runner := &Runner{
-		args:   conf.Command,
-		dryRun: conf.DryRun,
-	}
-	items := fs.filter(inv.Items)
-	formatter := NewFormatter(conf.Format, items)
+	// TODO check default
 
-	if err := runner.Run(formatter, map[string]string{
-		"command": strings.Join(conf.Command, " "),
-	}, items...); err != nil {
-		return err
-	}
-
-	logrus.Info("DONE")
-	return nil
-}
-func (conf *AppConfig) Run() error {
-	inv, err := ParseInventory(conf.Inventory)
-	if err != nil {
-		return err
-	}
-
-	fs, _ := parseFilters(conf.Limit)
-
-	logrus.Infof("filters: %q", fs)
-	logrus.Infof("command: %s", conf.Command)
-
-	r := inv.Runner.Run
-	if conf.Template != "" {
-		r = conf.Template
-	}
-
-	args := toArgs(r, map[string][]string{
-		"command": conf.Command,
-	})
+	args := toArgs(inv.Templates[conf.Template], conf.Args)
 
 	runner := &Runner{
 		args:   args,
@@ -92,49 +54,14 @@ func (conf *AppConfig) Run() error {
 	items := fs.filter(inv.Items)
 	formatter := NewFormatter(conf.Format, items)
 
-	if err := runner.Run(formatter, map[string]string{
-		"command": strings.Join(conf.Command, " "),
-	}, items...); err != nil {
+	if err := runner.Run(formatter, conf.Args, items...); err != nil {
 		return err
 	}
 
 	logrus.Info("DONE")
 	return nil
 }
-func (conf *AppConfig) Copy() error {
-	inv, err := ParseInventory(conf.Inventory)
-	if err != nil {
-		return err
-	}
 
-	fs, _ := parseFilters(conf.Limit)
-
-	logrus.Infof("filters: %q", fs)
-
-	r := inv.Runner.Copy
-
-	args := toArgs(r, map[string][]string{
-		"src":  []string{conf.Src},
-		"dest": []string{conf.Dest},
-	})
-
-	runner := &Runner{
-		args:   args,
-		dryRun: conf.DryRun,
-	}
-	items := fs.filter(inv.Items)
-	formatter := NewFormatter(conf.Format, items)
-
-	if err := runner.Run(formatter, map[string]string{
-		"src":  conf.Src,
-		"dest": conf.Dest,
-	}, items...); err != nil {
-		return err
-	}
-
-	logrus.Info("DONE")
-	return nil
-}
 func (conf *AppConfig) Set() error {
 	inv, err := ParseInventory(conf.Inventory)
 	if err != nil {
