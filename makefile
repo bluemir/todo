@@ -6,12 +6,7 @@ default: $(BIN_NAME)
 GIT_COMMIT_ID = $(shell git rev-parse --short HEAD)
 VERSION=$(GIT_COMMIT_ID)-$(shell date +"%Y%m%d.%H%M%S")
 
-# if gopath not set, make inside current dir
-ifeq ($(GOPATH),)
-	GOPATH=$(PWD)/.GOPATH
-endif
-
-GO_SOURCES = $(shell find . -name ".GOPATH" -prune -o -type f -name '*.go' -print)
+GO_SOURCES = $(shell find . -type f -name '*.go' -print)
 
 # Automatic runner
 DIRS = $(shell find . -name dist -prune -o -name ".git" -prune -o -type d -print)
@@ -31,8 +26,7 @@ reset:
 	ps -e | grep make | grep -v grep | awk '{print $$1}' | xargs kill
 
 ## Binary build
-$(BIN_NAME): $(GO_SOURCES) $(GOPATH)/src/$(IMPORT_PATH)
-	go get -v -d $(IMPORT_PATH)            # can replace with glide
+$(BIN_NAME): $(GO_SOURCES)
 	go build -v \
 		-ldflags "-X main.VERSION=$(VERSION)" \
 		-o $(BIN_NAME) .
@@ -47,7 +41,6 @@ deploy: build/windows/amd64/$(BIN_NAME)
 #deploy:
 	# TODO scp or upload binary
 	# TODO call hook to deploy(ex. docker command)
--include hook.mk
 
 build/%/$(BIN_NAME): export GOOS=$(subst /,,$(dir $*))
 build/%/$(BIN_NAME): export GOARCH=$(notdir $*)
@@ -61,10 +54,5 @@ build/%/$(BIN_NAME):
 clean:
 	rm -rf dist/ vendor/ $(BIN_NAME)
 	go clean
-
-$(GOPATH)/src/$(IMPORT_PATH):
-	@echo "make symbolic link on $(GOPATH)/src/$(IMPORT_PATH)..."
-	@mkdir -p $(dir $(GOPATH)/src/$(IMPORT_PATH))
-	ln -s $(PWD) $(GOPATH)/src/$(IMPORT_PATH)
 
 .PHONY: .sources run auto-run reset tools clean

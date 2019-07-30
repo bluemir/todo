@@ -146,6 +146,9 @@ todo run -i example.yaml -l cluster=web,role=manager -t ssh -- 'journalctl -u do
 # check kernel version
 todo run -i example.yaml -t ssh -- uname -a
 
+# copy scripts to nodes
+todo run -i example.yaml -l cluster=web,role=worker -t scp -- security-check.sh .
+
 ```
 
 

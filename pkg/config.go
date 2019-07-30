@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,7 +46,12 @@ func (conf *AppConfig) Exec() error {
 
 	// TODO check default
 
-	args := toArgs(inv.Templates[conf.Template], conf.Args)
+	t, ok := inv.Templates[conf.Template]
+	if !ok {
+		return errors.Errorf("template not found. check inventory file")
+	}
+
+	args := toArgs(t, conf.Args)
 
 	runner := &Runner{
 		args:   args,

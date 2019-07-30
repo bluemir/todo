@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/mgutz/str"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -80,6 +81,9 @@ func (r *Runner) Run(formatter Formatter, args []string, items ...Item) error {
 
 		if r.dryRun {
 			result = append([]string{"echo"}, result...)
+		}
+		if len(result) < 1 {
+			return errors.Errorf("command is blank")
 		}
 
 		c := exec.CommandContext(ctx, result[0], result[1:]...)

@@ -17,7 +17,7 @@ func main() {
 	app := kingpin.New("todo", "massive runner for server management")
 	app.Flag("debug", "Enable debug mode.").BoolVar(&conf.Debug)
 	app.Flag("verbose", "Log level").Short('v').CounterVar(&conf.LogLevel)
-	app.Flag("inventory", "Inventory").Short('i').Default(".inventory.yaml").ExistingFileVar(&conf.Inventory)
+	app.Flag("inventory", "Inventory").Short('i').PlaceHolder("$HOME/.inventory.yaml").Default(os.ExpandEnv("$HOME/.inventory.yaml")).ExistingFileVar(&conf.Inventory)
 
 	exec := app.Command("exec", "running command (alias run)").Alias("run")
 	exec.Flag("format", "display format(json, text, simple, detail or free format)").Default("simple").Short('f').StringVar(&conf.Format)
