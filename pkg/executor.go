@@ -6,10 +6,11 @@ import (
 	"context"
 	"io"
 	"os/exec"
-	"regexp"
+	"strings"
 	"text/template"
 
 	"github.com/mgutz/str"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -19,18 +20,12 @@ type Runner struct {
 	dryRun bool
 }
 
-func toArgs(tmplStr string, opts map[string][]string) []string {
-	re := regexp.MustCompile("^{{([a-z]+)}}$")
+func toArgs(tmplStr string, optArgs []string) []string {
 	parts := str.ToArgv(tmplStr)
 	result := []string{}
 	for _, part := range parts {
-		m := re.FindStringSubmatch(part)
-		if len(m) < 2 {
-			result = append(result, part)
-			continue
-		}
-		if v, ok := opts[m[1]]; ok {
-			result = append(result, v...)
+		if strings.EqualFold(part, "{{args}}") {
+			result = append(result, optArgs...)
 		} else {
 			result = append(result, part)
 		}
@@ -38,18 +33,24 @@ func toArgs(tmplStr string, opts map[string][]string) []string {
 	return result
 }
 
-func (r *Runner) parts(opt map[string]string) ([]*template.Template, error) {
-	// TODO funcMap
-	fMap := map[string]interface{}{}
-
-	for k, v := range opt {
-		fMap[k] = func() string {
-			return v
-		}
+func (r *Runner) parts(args []string) ([]*template.Template, error) {
+	fMap := map[string]interface{}{
+		"args": func() string {
+			return strings.Join(args, " ")
+		},
+		"arg": func(index int) string {
+			logrus.Tracef("arg index: %d", index)
+			if index < 1 || index > len(args) {
+				logrus.Warnf("index of bound: {{arg %d}}", index)
+				return ""
+			}
+			return args[index-1]
+		},
 	}
 
 	tParts := []*template.Template{}
 	for n, part := range r.args {
+		logrus.Tracef("part: %s", part)
 		tmpl, err := template.New("__").Funcs(fMap).Parse(part)
 		if err != nil {
 			logrus.Error(err)
@@ -60,8 +61,8 @@ func (r *Runner) parts(opt map[string]string) ([]*template.Template, error) {
 	}
 	return tParts, nil
 }
-func (r *Runner) Run(formatter Formatter, opts map[string]string, items ...Item) error {
-	templates, err := r.parts(opts)
+func (r *Runner) Run(formatter Formatter, args []string, items ...Item) error {
+	templates, err := r.parts(args)
 	if err != nil {
 		return err
 	}
@@ -80,6 +81,9 @@ func (r *Runner) Run(formatter Formatter, opts map[string]string, items ...Item)
 
 		if r.dryRun {
 			result = append([]string{"echo"}, result...)
+		}
+		if len(result) < 1 {
+			return errors.Errorf("command is blank")
 		}
 
 		c := exec.CommandContext(ctx, result[0], result[1:]...)

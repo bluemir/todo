@@ -5,6 +5,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/mgutz/str v1.2.0
+	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.1
 	github.com/stretchr/testify v1.2.2
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
