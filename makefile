@@ -1,58 +1,36 @@
-IMPORT_PATH=github.com/bluemir/todo
+IMPORT_PATH=$(shell cat go.mod | head -n 1 | awk '{print $$2}')
 BIN_NAME=$(notdir $(IMPORT_PATH))
 
-default: $(BIN_NAME)
+default: build/$(BIN_NAME)
 
 GIT_COMMIT_ID = $(shell git rev-parse --short HEAD)
 VERSION=$(GIT_COMMIT_ID)-$(shell date +"%Y%m%d.%H%M%S")
 
 GO_SOURCES = $(shell find . -type f -name '*.go' -print)
 
-# Automatic runner
-DIRS = $(shell find . -name dist -prune -o -name ".git" -prune -o -type d -print)
-
-.sources:
-	@echo $(DIRS) makefile \
-		$(GO_SOURCES) | tr " " "\n"
-run: $(BIN_NAME)
-	./$(BIN_NAME) -vvvv -i example.yaml run --dry-run -- cat 'hey something'
-
-auto-run:
-	while true; do \
-		make .sources | entr -rd make run ;  \
-		echo "hit ^C again to quit" && sleep 1  \
-	; done
-reset:
-	ps -e | grep make | grep -v grep | awk '{print $$1}' | xargs kill
+run: build/$(BIN_NAME)
+	build/$(BIN_NAME) -vvvv -i example.yaml run --dry-run -- cat 'hey something'
 
 ## Binary build
-$(BIN_NAME): $(GO_SOURCES)
-	go build -v \
-		-ldflags "-X main.VERSION=$(VERSION)" \
-		-o $(BIN_NAME) .
-	@echo Build DONE
+build/$(BIN_NAME): build/release///$(BIN_NAME)
+	cp $< $@
 
 ## Multi platform
-deploy: build/linux/amd64/$(BIN_NAME)
-deploy: build/linux/arm/$(BIN_NAME)
-deploy: build/windows/amd64/$(BIN_NAME)
-#deploy: build/windows/arm/$(BIN_NAME)
-# make hook.mk file for your hook (example. following lines)
-#deploy:
-	# TODO scp or upload binary
-	# TODO call hook to deploy(ex. docker command)
+release: build/release/linux/amd64/$(BIN_NAME)
+release: build/release/linux/arm/$(BIN_NAME)
+release: build/release/windows/amd64/$(BIN_NAME)
 
-build/%/$(BIN_NAME): export GOOS=$(subst /,,$(dir $*))
-build/%/$(BIN_NAME): export GOARCH=$(notdir $*)
-build/%/$(BIN_NAME):
+build/release/%/$(BIN_NAME): export GOOS=$(subst /,,$(dir $*))
+build/release/%/$(BIN_NAME): export GOARCH=$(notdir $*)
+build/release/%/$(BIN_NAME): $(GO_SOURCES)
 	@echo --------------------------BUILD $$GOOS $$GOARCH-----------------------------
-	make clean
-	make $(BIN_NAME)
-	mkdir -p $(@D)
-	mv $(BIN_NAME) $@
+	go build -v \
+		-ldflags "-X main.VERSION=$(VERSION)" \
+		-o $@ .
+	@echo Build DONE
 
 clean:
-	rm -rf dist/ vendor/ $(BIN_NAME)
+	rm -rf build/
 	go clean
 
-.PHONY: .sources run auto-run reset tools clean
+.PHONY: default run release clean
