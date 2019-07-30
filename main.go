@@ -15,7 +15,6 @@ func main() {
 	conf := pkg.NewAppConfig()
 
 	app := kingpin.New("todo", "massive runner for server management")
-	app.Flag("debug", "Enable debug mode.").BoolVar(&conf.Debug)
 	app.Flag("verbose", "Log level").Short('v').CounterVar(&conf.LogLevel)
 	app.Flag("inventory", "Inventory").Short('i').PlaceHolder("$HOME/.inventory.yaml").Default(os.ExpandEnv("$HOME/.inventory.yaml")).ExistingFileVar(&conf.Inventory)
 
@@ -42,8 +41,10 @@ func main() {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// adjust loglevel
+	level := logrus.Level(conf.LogLevel) + logrus.ErrorLevel
 	logrus.SetOutput(os.Stderr)
-	logrus.SetLevel(logrus.Level(conf.LogLevel + 3))
+	logrus.SetLevel(level) // error level is default
+	logrus.Infof("error level: %s", level)
 
 	var err error
 	switch cmd {
